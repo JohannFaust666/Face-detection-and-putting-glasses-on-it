@@ -1,6 +1,7 @@
 import cv2
 import dlib
 import numpy as np
+import argparse
 
 # Initialize the face detector and facial landmark predictor
 detector = dlib.get_frontal_face_detector()
@@ -40,52 +41,58 @@ def overlay_transparent(background, overlay, x, y):
 
     return background
 
-# Function to add sunglasses
-def add_sunglasses_to_face(image_path, sunglasses_path):
-    # Load the images
+def process_image(image_path, add_sunglasses, blur_face, sunglasses_path='glasses.png'):
     image = cv2.imread(image_path)
-    sunglasses_img = cv2.imread(sunglasses_path, cv2.IMREAD_UNCHANGED)
-
-    # Convert image to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    faces = detector(gray, 0)
 
-    # Detect faces
-    faces = detector(gray)
     for face in faces:
         landmarks = predictor(gray, face)
 
-        # Get the position of the left and right eye
-        left_eye_x = landmarks.part(36).x
-        left_eye_y = landmarks.part(36).y
-        right_eye_x = landmarks.part(45).x
-        right_eye_y = landmarks.part(45).y
+        if blur_face:
+            face_mask = np.zeros_like(gray)
+            points = np.array([[landmarks.part(n).x, landmarks.part(n).y] for n in range(0, 68)])
+            convexhull = cv2.convexHull(points)
+            cv2.fillConvexPoly(face_mask, convexhull, 255)
+            inverted_face_mask = cv2.bitwise_not(face_mask)
+            face_image = cv2.bitwise_and(image, image, mask=face_mask)
+            blurred_face = cv2.GaussianBlur(face_image, (99, 99), 30)
+            image = cv2.bitwise_and(blurred_face, blurred_face, mask=face_mask) + cv2.bitwise_and(image, image, mask=inverted_face_mask)
 
-        # Calculate angle between eyes
-        delta_x = right_eye_x - left_eye_x
-        delta_y = right_eye_y - left_eye_y
-        angle = np.arctan(delta_y / delta_x)
-        angle = (angle * 180) / np.pi
-
-        # Scale and rotate the sunglasses
-        eye_width = np.sqrt((delta_x ** 2) + (delta_y ** 2))
-        sunglass_width = eye_width * 2
-        scale_factor = sunglass_width / sunglasses_img.shape[1]
-        sunglass_resized = cv2.resize(sunglasses_img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
-        sunglass_rotated = cv2.getRotationMatrix2D((sunglass_resized.shape[1] / 2, sunglass_resized.shape[0] / 2), angle, 1)
-        sunglass_rotated = cv2.warpAffine(sunglass_resized, sunglass_rotated, (sunglass_resized.shape[1], sunglass_resized.shape[0]))
-
-        # Calculate position and overlay sunglasses
-        x = left_eye_x - int(0.25 * sunglass_width)
-        y = left_eye_y - int(0.5 * sunglass_resized.shape[0])
-        image = overlay_transparent(image, sunglass_rotated, x, y)
+        if add_sunglasses:
+            sunglasses_img = cv2.imread(sunglasses_path, cv2.IMREAD_UNCHANGED)
+            left_eye_x = landmarks.part(36).x
+            left_eye_y = landmarks.part(36).y
+            right_eye_x = landmarks.part(45).x
+            right_eye_y = landmarks.part(45).y
+            delta_x = right_eye_x - left_eye_x
+            delta_y = right_eye_y - left_eye_y
+            angle = np.arctan(delta_y / delta_x)
+            angle = (angle * 180) / np.pi
+            eye_width = np.sqrt((delta_x ** 2) + (delta_y ** 2))
+            sunglass_width = eye_width * 2
+            scale_factor = sunglass_width / sunglasses_img.shape[1]
+            sunglass_resized = cv2.resize(sunglasses_img, None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
+            sunglass_rotated = cv2.getRotationMatrix2D((sunglass_resized.shape[1] / 2, sunglass_resized.shape[0] / 2), angle, 1)
+            sunglass_rotated = cv2.warpAffine(sunglass_resized, sunglass_rotated, (sunglass_resized.shape[1], sunglass_resized.shape[0]))
+            x = left_eye_x - int(0.25 * sunglass_width)
+            y = left_eye_y - int(0.5 * sunglass_resized.shape[0])
+            image = overlay_transparent(image, sunglass_rotated, x, y)
 
     return image
 
-# Add sunglasses to the faces in the image
-result_image = add_sunglasses_to_face('3.jpg', 'glasses.png')
 
-# Save or display the result
-cv2.imwrite('output_image.jpg', result_image)
-# cv2.imshow('Output', result_image)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Process an image.')
+    parser.add_argument('image_path', type=str, help='Path to the input image')
+    parser.add_argument('--sunglasses', action='store_true', help='Overlay sunglasses on the face')
+    parser.add_argument('--blur', action='store_true', help='Blur the face')
+
+    args = parser.parse_args()
+
+    result_image = process_image(args.image_path, args.sunglasses, args.blur)
+
+    output_path = 'output_image.jpg'
+    cv2.imwrite(output_path, result_image)
+    print(f"Processed image saved as {output_path}")
