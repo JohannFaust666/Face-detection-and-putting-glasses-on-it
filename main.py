@@ -41,6 +41,7 @@ def overlay_transparent(background, overlay, x, y):
 
     return background
 
+# Fuction that blurs face and overlay glasses if needed by given arguments
 def process_image(image_path, add_sunglasses, blur_face, sunglasses_path='glasses.png'):
     image = cv2.imread(image_path)
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -84,6 +85,7 @@ def process_image(image_path, add_sunglasses, blur_face, sunglasses_path='glasse
 
 
 if __name__ == "__main__":
+    # Parsing arguments
     parser = argparse.ArgumentParser(description='Process an image.')
     parser.add_argument('image_path', type=str, help='Path to the input image')
     parser.add_argument('--sunglasses', action='store_true', help='Overlay sunglasses on the face')
@@ -93,6 +95,7 @@ if __name__ == "__main__":
 
     result_image = process_image(args.image_path, args.sunglasses, args.blur)
 
+    # You can change name of the output img if needed
     output_path = 'output_image.jpg'
     cv2.imwrite(output_path, result_image)
     print(f"Processed image saved as {output_path}")
